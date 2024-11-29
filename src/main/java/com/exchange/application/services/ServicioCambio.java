@@ -10,49 +10,140 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class ServicioCambio implements CasoDeUsoDeCambio {
     
+    private static final String MONEDA_BASE = "USD";
     private final RepositorioTasaDeCambio repositorioTasaDeCambio;
 
     @Override
     public BigDecimal calcularCambio(BigDecimal monto, String monedaOrigen, String monedaDestino) {
-        TipoDeCambio tasa = repositorioTasaDeCambio
-            .findByMonedaOrigenAndMonedaDestino(monedaOrigen, monedaDestino)
-            .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
-                String.format("Tipo de cambio no encontrado para %s a %s", monedaOrigen, monedaDestino)
-            ));
+        // Si las monedas son iguales
+        if (monedaOrigen.equals(monedaDestino)) {
+            return monto;
+        }
+
+        // Si la moneda origen es USD (caso directo)
+        if (monedaOrigen.equals(MONEDA_BASE)) {
+            TipoDeCambio tasaDirecta = repositorioTasaDeCambio
+                .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaDestino)
+                .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
+                    String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaDestino)));
             
-        return monto.multiply(tasa.getTasa()).setScale(2, RoundingMode.HALF_UP);
+            return monto.multiply(tasaDirecta.getTasa())
+                .setScale(2, RoundingMode.HALF_UP);
+        }
+
+        // Si la moneda destino es USD (caso inverso)
+        if (monedaDestino.equals(MONEDA_BASE)) {
+            TipoDeCambio tasaDirecta = repositorioTasaDeCambio
+                .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaOrigen)
+                .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
+                    String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaOrigen)));
+            
+            return monto.divide(tasaDirecta.getTasa(), 6, RoundingMode.HALF_UP)
+                .setScale(2, RoundingMode.HALF_UP);
+        }
+
+        // Conversión a través de USD
+        TipoDeCambio tasaOrigenUSD = repositorioTasaDeCambio
+            .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaOrigen)
+            .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
+                String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaOrigen)));
+        
+        TipoDeCambio tasaUSDDestino = repositorioTasaDeCambio
+            .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaDestino)
+            .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
+                String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaDestino)));
+        
+        return monto
+            .divide(tasaOrigenUSD.getTasa(), 6, RoundingMode.HALF_UP)
+            .multiply(tasaUSDDestino.getTasa())
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     @Override
     public TipoDeCambio actualizarTasaDeCambio(String monedaOrigen, String monedaDestino, BigDecimal tasa) {
-        // Primero buscar si existe
-        TipoDeCambio existingRate = repositorioTasaDeCambio
-            .findByMonedaOrigenAndMonedaDestino(monedaOrigen, monedaDestino)
-            .orElse(null);
+        // Solo permitir actualizaciones donde USD es la moneda origen
+        if (!monedaOrigen.equals(MONEDA_BASE)) {
+            throw new IllegalArgumentException(
+                "Solo se permiten actualizaciones de tasas donde USD es la moneda origen"
+            );
+        }
         
         Moneda from = new Moneda(monedaOrigen, monedaOrigen);
         Moneda to = new Moneda(monedaDestino, monedaDestino);
         
+        // Buscar si existe la tasa
+        TipoDeCambio existingRate = repositorioTasaDeCambio
+            .findByMonedaOrigenAndMonedaDestino(monedaOrigen, monedaDestino)
+            .orElse(null);
+        
         if (existingRate != null) {
-            // Actualizar el existente
             return repositorioTasaDeCambio.actualizar(new TipoDeCambio(from, to, tasa));
         } else {
-            // Crear uno nuevo
             return repositorioTasaDeCambio.guardar(new TipoDeCambio(from, to, tasa));
         }
     }
 
     @Override
     public TipoDeCambio obtenerTasaDeCambio(String monedaOrigen, String monedaDestino) {
-        return repositorioTasaDeCambio
-            .findByMonedaOrigenAndMonedaDestino(monedaOrigen, monedaDestino)
+        // Si las monedas son iguales
+        if (monedaOrigen.equals(monedaDestino)) {
+            return new TipoDeCambio(
+                new Moneda(monedaOrigen, monedaOrigen),
+                new Moneda(monedaDestino, monedaDestino),
+                BigDecimal.ONE
+            );
+        }
+
+        // Si la moneda origen es USD (caso directo)
+        if (monedaOrigen.equals(MONEDA_BASE)) {
+            return repositorioTasaDeCambio
+                .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaDestino)
+                .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
+                    String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaDestino)
+                ));
+        }
+
+        // Si la moneda destino es USD (caso inverso)
+        if (monedaDestino.equals(MONEDA_BASE)) {
+            TipoDeCambio tasaDirecta = repositorioTasaDeCambio
+                .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaOrigen)
+                .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
+                    String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaOrigen)
+                ));
+            
+            return new TipoDeCambio(
+                new Moneda(monedaOrigen, monedaOrigen),
+                new Moneda(monedaDestino, monedaDestino),
+                BigDecimal.ONE.divide(tasaDirecta.getTasa(), 6, RoundingMode.HALF_UP)
+            );
+        }
+
+        // Conversión a través de USD
+        TipoDeCambio tasaOrigenUSD = repositorioTasaDeCambio
+            .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaOrigen)
             .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
-                String.format("Tasa de intercambio no encontrada para %s to %s", monedaOrigen, monedaDestino)
+                String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaOrigen)
             ));
+        
+        TipoDeCambio tasaUSDDestino = repositorioTasaDeCambio
+            .findByMonedaOrigenAndMonedaDestino(MONEDA_BASE, monedaDestino)
+            .orElseThrow(() -> new ExcepcionIntercambioNoEncontrado(
+                String.format("No se encontró tasa para %s a %s", MONEDA_BASE, monedaDestino)
+            ));
+        
+        BigDecimal tasaCalculada = tasaUSDDestino.getTasa()
+            .divide(tasaOrigenUSD.getTasa(), 6, RoundingMode.HALF_UP);
+        
+        return new TipoDeCambio(
+            new Moneda(monedaOrigen, monedaOrigen),
+            new Moneda(monedaDestino, monedaDestino),
+            tasaCalculada
+        );
     }
 } 
