@@ -3,16 +3,21 @@ package com.exchange.application.services;
 import com.exchange.domain.exception.ExcepcionIntercambioNoEncontrado;
 import com.exchange.domain.model.Moneda;
 import com.exchange.domain.model.TipoDeCambio;
+import com.exchange.domain.model.TendenciaMercado;
+import com.exchange.domain.model.VolatilidadMercado;
+import com.exchange.domain.model.RecomendacionMercado;
 import com.exchange.domain.ports.input.CasoDeUsoDeCambio;
 import com.exchange.domain.ports.output.RepositorioTasaDeCambio;
 import com.exchange.infrastructure.rest.dto.RespuestaCalculosAvanzadosDto;
+import com.exchange.infrastructure.rest.dto.RespuestaCalculosAvanzadosDto.MacdDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -155,12 +160,15 @@ public class ServicioCambio implements CasoDeUsoDeCambio {
         TipoDeCambio tasaBase = obtenerTasaDeCambio(monedaOrigen, monedaDestino);
         BigDecimal spread = tasaBase.getTasa().multiply(new BigDecimal("0.02"));
         
-        // Calcular indicadores técnicos
-        Integer rsi = 55; // Valor simulado
-        String tendencia = servicioAnalisisTecnico.determinarTendencia(
-            tasaBase.getTasa(), 
-            tasaBase.getTasa().subtract(new BigDecimal("0.01"))
+        List<BigDecimal> historicoPreciosRecientes = obtenerHistoricoPreciosRecientes(monedaOrigen, monedaDestino);
+        
+        Integer rsi = servicioAnalisisTecnico.calcularRSI(historicoPreciosRecientes).intValue();
+        TendenciaMercado tendencia = servicioAnalisisTecnico.determinarTendencia(historicoPreciosRecientes);
+        MacdDto macd = servicioAnalisisTecnico.calcularMACD(historicoPreciosRecientes);
+        VolatilidadMercado volatilidad = servicioAnalisisTecnico.calcularVolatilidad(
+            servicioAnalisisTecnico.calcularDesviacionEstandar(historicoPreciosRecientes)
         );
+        RecomendacionMercado recomendacion = servicioAnalisisTecnico.determinarRecomendacion(tendencia, rsi, macd);
         
         return RespuestaCalculosAvanzadosDto.builder()
             .par(monedaOrigen + "/" + monedaDestino)
@@ -177,25 +185,33 @@ public class ServicioCambio implements CasoDeUsoDeCambio {
                 .promedioMovil1Hora(tasaBase.getTasa())
                 .maximoUltimos30Dias(tasaBase.getTasa().multiply(new BigDecimal("1.05")))
                 .minimoUltimos30Dias(tasaBase.getTasa().multiply(new BigDecimal("0.95")))
-                .desviacionEstandar10Min(new BigDecimal("0.05"))
+                .desviacionEstandar10Min(servicioAnalisisTecnico.calcularDesviacionEstandar(historicoPreciosRecientes))
                 .desviacionEstandar1Hora(new BigDecimal("0.1"))
                 .tasaCambio10Min(new BigDecimal("-1.02"))
                 .tasaCambio1Hora(new BigDecimal("0.85"))
-                .tendencia(tendencia)
-                .volatilidad("BAJA")
+                .tendencia(tendencia.name())
+                .volatilidad(volatilidad.name())
                 .rsi(rsi)
-                .macd(RespuestaCalculosAvanzadosDto.MacdDto.builder()
-                    .lineaRapida(new BigDecimal("4.8"))
-                    .lineaLenta(new BigDecimal("4.85"))
-                    .histograma(new BigDecimal("-0.05"))
-                    .build())
+                .macd(macd)
                 .intervaloConfianza95(new double[]{
                     tasaBase.getTasa().doubleValue() - 0.05,
                     tasaBase.getTasa().doubleValue() + 0.05
                 })
                 .correlacionConUSD_EUR(new BigDecimal("0.85"))
-                .recomendacion("MANTENER")
+                .recomendacion(recomendacion.name())
                 .build())
             .build();
+    }
+
+    private List<BigDecimal> obtenerHistoricoPreciosRecientes(String monedaOrigen, String monedaDestino) {
+        // TODO: Implementar obtención de histórico desde base de datos
+        // Por ahora retornamos datos simulados
+        List<BigDecimal> precios = new ArrayList<>();
+        BigDecimal tasaBase = obtenerTasaDeCambio(monedaOrigen, monedaDestino).getTasa();
+        
+        for (int i = 0; i < 30; i++) {
+            precios.add(tasaBase.add(new BigDecimal(Math.random() * 0.1 - 0.05)));
+        }
+        return precios;
     }
 } 

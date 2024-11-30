@@ -1,6 +1,6 @@
 INSERT INTO TiposDeCambio (moneda_origen, moneda_destino, tasa) VALUES
-('USD', 'PEN', 3.75),
-('USD', 'COP', 3950.00),
+('USD', 'PEN', 3.79),
+('USD', 'COP', 4384.00),
 ('USD', 'MXN', 17.50),
 ('USD', 'ARS', 820.00),
 ('USD', 'CLP', 870.00),
