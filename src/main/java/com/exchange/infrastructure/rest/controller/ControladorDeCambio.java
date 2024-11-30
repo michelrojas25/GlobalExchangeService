@@ -5,7 +5,11 @@ import com.exchange.domain.model.CodigoMondeda;
 import com.exchange.domain.ports.input.CasoDeUsoDeCambio;
 import com.exchange.infrastructure.rest.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -116,5 +120,31 @@ public class ControladorDeCambio {
                     LocalDateTime.now()
                 ));
         }
+    }
+
+    @Operation(summary = "Obtener cálculos avanzados de tipo de cambio")
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200", 
+            description = "Cálculo exitoso",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = RespuestaCalculosAvanzadosDto.class)
+            )
+        )
+    })
+    @GetMapping("/analytics/{monedaOrigen}/{monedaDestino}")
+    public ResponseEntity<RespuestaCalculosAvanzadosDto> obtenerCalculosAvanzados(
+        @Parameter(description = "Código de moneda origen", example = "USD")
+        @PathVariable String monedaOrigen,
+        @Parameter(description = "Código de moneda destino", example = "PEN")
+        @PathVariable String monedaDestino
+    ) {
+        if (!CodigoMondeda.isValid(monedaOrigen) || !CodigoMondeda.isValid(monedaDestino)) {
+            throw new IllegalArgumentException("Código de moneda inválido");
+        }
+        
+        var resultado = casoDeUsoDeCambio.obtenerCalculosAvanzados(monedaOrigen, monedaDestino);
+        return ResponseEntity.ok(resultado);
     }
 } 

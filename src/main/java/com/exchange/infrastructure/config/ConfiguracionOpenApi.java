@@ -1,7 +1,9 @@
 package com.exchange.infrastructure.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -13,7 +15,14 @@ public class ConfiguracionOpenApi {
         return new OpenAPI()
             .info(new Info()
                 .title("API de Tipo de Cambio")
-                .description("API para el calculo y gestion de tipos de cambio")
-                .version("1.0.0"));
+                .description("API para el cálculo y gestión de tipos de cambio")
+                .version("1.0.0")
+                .contact(new Contact()
+                    .name("Exchange Team")
+                    .email("contact@exchange.com"))
+                .license(new License()
+                    .name("Apache 2.0")
+                    .url("http://www.apache.org/licenses/LICENSE-2.0.html")));
     }
+
 }

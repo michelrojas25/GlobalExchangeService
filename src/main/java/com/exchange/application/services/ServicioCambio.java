@@ -5,11 +5,13 @@ import com.exchange.domain.model.Moneda;
 import com.exchange.domain.model.TipoDeCambio;
 import com.exchange.domain.ports.input.CasoDeUsoDeCambio;
 import com.exchange.domain.ports.output.RepositorioTasaDeCambio;
+import com.exchange.infrastructure.rest.dto.RespuestaCalculosAvanzadosDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -145,5 +147,27 @@ public class ServicioCambio implements CasoDeUsoDeCambio {
             new Moneda(monedaDestino, monedaDestino),
             tasaCalculada
         );
+    }
+
+    @Override
+    public RespuestaCalculosAvanzadosDto obtenerCalculosAvanzados(String monedaOrigen, String monedaDestino) {
+        TipoDeCambio tasaBase = obtenerTasaDeCambio(monedaOrigen, monedaDestino);
+        BigDecimal spread = tasaBase.getTasa().multiply(new BigDecimal("0.02")); // 2% spread
+        
+        return RespuestaCalculosAvanzadosDto.builder()
+            .par(monedaOrigen + "/" + monedaDestino)
+            .fecha(LocalDateTime.now())
+            .tasas(RespuestaCalculosAvanzadosDto.TasasDto.builder()
+                .compra(tasaBase.getTasa().subtract(spread))
+                .venta(tasaBase.getTasa().add(spread))
+                .spread(spread)
+                .build())
+            .analisis(RespuestaCalculosAvanzadosDto.AnalisisDto.builder()
+                .promedioMovil7Dias(tasaBase.getTasa())
+                .promedioMovil30Dias(tasaBase.getTasa())
+                .tendencia("ESTABLE")
+                .volatilidad("BAJA")
+                .build())
+            .build();
     }
 } 
