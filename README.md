@@ -156,7 +156,7 @@ Logging detallado de errores
 
 ```bash
 # Clonar repositorio
-git clone https://github.com/exchange-team/exchange-service.git
+git clone https://github.com/michelrojas25/GlobalExchangeService.git
 
 # Instalar dependencias
 mvn clean install
